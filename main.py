@@ -18,17 +18,28 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI()
 
-user_input = "i want to make an appointment my name is Andres Gonzalez, my email is andresfgonzalezr1996@gmail.com, my timezone is America/Chicago and mi bookingId is 1"
+user_input = "i want to make an appointment my name is Andres Gonzalez, my email is andresfgonzalezr1996@gmail.com, my timezone is America/Bogota and i want my appointment in august 8 from 2024 at 11:00 AM and the event type is 12"
 
 
 def get_appointment(user_input):
-    prompt = f"""I need to extract the information about the user_input, also I have to fill out the next format and give please to me in a JSON format
-    'bookingId' = Column(integer)
-    'email' = Column(String)
-    'name' = Column(String)
-    'timeZone' = Column(String)
-    the user_input is the following {user_input} from which you have to extract the information
-    if the user_input has missing values return None for that values
+    prompt = f"""I need to extract the information from the given user_input and fill out the following format in JSON:
+    {{
+        "eventTypeId": 950045,
+        "start": "2024-08-01T13:00:00.000Z",
+        "responses": {{
+            "name": null,
+            "email": null,
+            "guests": [],
+            "location": {{
+                "value": link,
+                "optionValue": null
+            }}
+        }},
+        "metadata": {{}},
+        "timeZone": "America/Bogota",
+        "language": "en"
+    }}
+    The user_input is: {user_input}. Please extract the necessary information to fill the above fields. For the 'start' field, use the format 'YYYY-MM-DDTHH:MM:00.000Z'. If the year is not mentioned, default to 2024.
     """
 
     response = client.chat.completions.create(
@@ -49,13 +60,11 @@ json_message = get_appointment(user_input)
 
 cal_api_key = os.getenv('CAL_API_KEY')
 
-url = f"https://api.cal.com/v1/attendees?apiKey={cal_api_key}"
-
-headers = {"content-type": "application/json"}
+url = f"https://api.cal.com/v1/bookings?apiKey={cal_api_key}"
 
 data = json.loads(json_message)
 
-response = requests.post(url, headers=headers, json=data)
+response = requests.post(url, json=data)
 
 if response.status_code == 200:
     print("Ok", response.json())
