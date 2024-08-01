@@ -18,7 +18,7 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI()
 
-user_input = "i want to make an appointment my name is Andres Gonzalez, my email is andresfgonzalezr1996@gmail.com, my timezone is America/Bogota and i want my appointment in august 8 from 2024 at 11:00 AM and the event type is 12"
+user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 5 from 2024 at 13:00 AM and the event type is 949511"
 
 
 def get_appointment(user_input):
@@ -26,20 +26,21 @@ def get_appointment(user_input):
     {{
         "eventTypeId": 950045,
         "start": "2024-08-01T13:00:00.000Z",
+        "end": "2024-08-01T13:00:00.000Z",
         "responses": {{
-            "name": null,
-            "email": null,
+            "name": "",
+            "email": "",
             "guests": [],
             "location": {{
-                "value": link,
-                "optionValue": null
+                "value": "cal video",
+                "optionValue": ""
             }}
         }},
         "metadata": {{}},
-        "timeZone": "America/Bogota",
+        "timeZone": "America/Chicago",
         "language": "en"
     }}
-    The user_input is: {user_input}. Please extract the necessary information to fill the above fields. For the 'start' field, use the format 'YYYY-MM-DDTHH:MM:00.000Z'. If the year is not mentioned, default to 2024.
+    The user_input is: {user_input}. Please extract the necessary information to fill the above fields. For the 'start' and the 'end' field, use the format 'YYYY-MM-DDTHH:MM:00.000Z'. If the year is not mentioned, default to 2024, also the 'end' always 30 minutes diference between the start and end dates.
     """
 
     response = client.chat.completions.create(
@@ -66,7 +67,11 @@ data = json.loads(json_message)
 
 response = requests.post(url, json=data)
 
-if response.status_code == 200:
-    print("Ok", response.json())
-else:
-    print(f"Error {response.status_code}: {response.text}")
+#if response.status_code == 200:
+print("Ok", response.json())
+#else:
+print(f"Error {response.status_code}: {response.text}")
+
+url = f"https://api.cal.com/v1/event-types?apiKey={cal_api_key}"
+response = requests.get(url)
+print(response.json())
