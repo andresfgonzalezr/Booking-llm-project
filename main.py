@@ -6,11 +6,12 @@ import openai
 from openai import OpenAI
 from dotenv import load_dotenv, find_dotenv
 from langchain.prompts import ChatPromptTemplate
-from langchain.chains import SimpleSequentialChain
+from langchain.chains import SimpleSequentialChain, LLMChain
 from langchain_core.runnables import RunnableSequence
 #from langchain.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 #from langchain.schema.output_parser import StrOutputParser
+from langchain.schema import ChatMessage, SystemMessage, HumanMessage
 
 import requests
 import json
@@ -20,13 +21,10 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI()
 
-user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"
-
 
 def get_appointment(user_input):
-    llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
 
-    prompt_appointment = ChatPromptTemplate.from_template(f"""I need to extract the information from the given user_input and fill out the following format in JSON:
+    prompt_appointment = (f"""I need to extract the information from the given user_input and fill out the following format in JSON:
     {{
         "eventTypeId": 000000,
         "start": "2024-08-01T13:00:00.000Z",
@@ -48,20 +46,20 @@ def get_appointment(user_input):
     Please extract the necessary information to fill the above fields. For the 'start' and the 'end' field, use the format 'YYYY-MM-DDTHH:MM:00.000Z'. If the year is not mentioned, default to 2024, also the 'end' always 30 minutes diference between the start and end dates.
     """)
 
-    chain_one = prompt_appointment | llm
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        temperature=0,
+        messages=[
+            {"role": "user", "content": prompt_appointment}
+        ]
+    )
 
-    prompt_confirmation = ChatPromptTemplate.from_template("""Based on the extracted appointment details, create a confirmation message for the user.
-    Here are the details:
-    {appointment_details}
-    Please generate a message confirming the appointment and providing any necessary information.
-    """)
+    message_response = response.choices[0].message.content
 
-    chain_two = prompt_confirmation | llm
+    return message_response
 
-    result = SimpleSequentialChain(chains=[chain_one, chain_two], verbose=True)
 
-    return result
-
+user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"
 
 print(get_appointment(user_input))
 
