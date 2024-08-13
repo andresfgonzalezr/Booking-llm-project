@@ -1,81 +1,197 @@
-#from langchain.agents import AgentExecutor, Agent
-#from langchain_community.llms import OpenAI
-#from langchain.prompts import PromptTemplate
 import os
 import openai
-from openai import OpenAI
-from dotenv import load_dotenv, find_dotenv
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains import SimpleSequentialChain, LLMChain
-from langchain_core.runnables import RunnableSequence
-#from langchain.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-#from langchain.schema.output_parser import StrOutputParser
-from langchain.schema import ChatMessage, SystemMessage, HumanMessage
-
-import requests
 import json
+from langchain.prompts import ChatPromptTemplate
+from langchain.schema.output_parser import StrOutputParser
+from langchain_openai import ChatOpenAI
+from typing import List, Optional
+from pydantic import BaseModel, Field
+from langchain.utils.openai_functions import convert_pydantic_to_openai_function
+from langchain.agents import tool
+import requests
+from langchain_core.messages import AIMessage
+from langchain.tools.render import format_tool_to_openai_function
+from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
+from langchain.schema.agent import AgentFinish
+# from langchain.tools import tool
+from langchain.prompts import MessagesPlaceholder
+from langchain.agents.format_scratchpad import format_to_openai_functions
+from langchain.schema.runnable import RunnablePassthrough
+from models import TaggingAppointment, TaggingAppointmentSearch
 
 
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI()
+from dotenv import load_dotenv, find_dotenv
+_ = load_dotenv(find_dotenv())
+openai.api_key = os.environ['OPENAI_API_KEY']
+
+model = ChatOpenAI(temperature=0)
 
 
-def get_appointment(user_input):
+convert_pydantic_to_openai_function(TaggingAppointment)
 
-    prompt_appointment = (f"""I need to extract the information from the given user_input and fill out the following format in JSON:
-    {{
-        "eventTypeId": 000000,
-        "start": "2024-08-01T13:00:00.000Z",
-        "end": "2024-08-01T13:00:00.000Z",
-        "responses": {{
-            "name": "",
-            "email": "",
-            "guests": [],
-            "location": {{
-                "value": "cal video",
-                "optionValue": ""
-            }}
-        }},
-        "metadata": {{}},
-        "timeZone": "America/Chicago",
-        "language": "en"
-    }}
-    The user_input is: {user_input}. 
-    Please extract the necessary information to fill the above fields. For the 'start' and the 'end' field, use the format 'YYYY-MM-DDTHH:MM:00.000Z'. If the year is not mentioned, default to 2024, also the 'end' always 30 minutes diference between the start and end dates.
-    """)
+tagging_functions = [convert_pydantic_to_openai_function(TaggingAppointment)]
 
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        temperature=0,
-        messages=[
-            {"role": "user", "content": prompt_appointment}
-        ]
-    )
+prompt_tagging_appointment = ChatPromptTemplate.from_messages([
+    ("system", "Think carefully, and then tag the text as instructed, if not explicitly provided do not guess, extract partial info"),
+    ("user", "{user_input}")
+])
 
-    message_response = response.choices[0].message.content
+model_with_tagging_function = model.bind(
+    functions=tagging_functions,
+    function_call={"name": "TaggingAppointment"}
+)
 
-    return message_response
+tagging_chain = prompt_tagging_appointment | model_with_tagging_function # | JsonOutputFunctionsParser()
+
+print(tagging_chain.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"}))
+
+json_message = tagging_chain.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
+
+data = json_message.additional_kwargs
+arguments_data = data["function_call"]["arguments"]
+
+json_data = json.loads(arguments_data)
 
 
-user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"
+@tool(args_schema=TaggingAppointment)
+def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, email: str, time_zone: str) -> dict:
 
-print(get_appointment(user_input))
+    """tag the piece of text with particular info, and then make the appointment"""
 
-json_message = get_appointment(user_input)
+    params = {
+        "eventTypeId": eventTypeId,
+        "start": start,
+        "end": end,
+        "name": name,
+        "email": email,
+        "time_zone": time_zone
+    }
 
-cal_api_key = os.getenv('CAL_API_KEY')
+    cal_api_key = os.getenv('CAL_API_KEY')
 
-url = f"https://api.cal.com/v1/bookings?apiKey={cal_api_key}"
+    url = f"https://api.cal.com/v1/bookings?apiKey={cal_api_key}"
 
-data = json.loads(json_message)
+    response_appointment = requests.post(url, params=params)
 
-response = requests.post(url, json=data)
+    print("Ok", response_appointment.json())
+    print(f"Error {response_appointment.status_code}: {response_appointment.text}")
 
-print("Ok", response.json())
-print(f"Error {response.status_code}: {response.text}")
+    url = f"https://api.cal.com/v1/event-types?apiKey={cal_api_key}"
+    response_appointment = requests.get(url)
+    print(response_appointment.json())
 
-url = f"https://api.cal.com/v1/event-types?apiKey={cal_api_key}"
-response = requests.get(url)
-print(response.json())
+    return response_appointment.json()
+
+
+format_tool_to_openai_function(get_appointment_function)
+
+# print(get_appointment_function({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"}))
+
+
+@tool(args_schema=TaggingAppointmentSearch)
+def get_appointment_info(id_appointment: str) -> str:
+    """tag the piece of text with particular info, and search for the appointment with the given id"""
+
+    api_key = os.getenv('API_KEY')
+
+    booking_id = id_appointment
+    url = f'https://api.cal.com/v1/bookings/{booking_id}'
+
+    response = requests.get(url, params={'apiKey': api_key})
+
+    print("Response:", response.json())
+    print(f"Error {response.status_code}: {response.text}")
+
+    return "ok appointment"
+
+
+format_tool_to_openai_function(get_appointment_info)
+
+# print(f"this is ftof id_appointment {format_tool_to_openai_function({"id_appointment": "94511"})}")
+
+
+functions = [
+    format_tool_to_openai_function(f) for f in [
+        get_appointment_function, get_appointment_info
+    ]
+]
+model_functions = ChatOpenAI(temperature=0).bind(functions=functions)
+
+prompt_agent_functions = ChatPromptTemplate.from_messages([
+    ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info"),
+    ("user", "{user_input}"),
+])
+
+chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser()
+
+result = chain_agents.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
+
+# result = chain_agents.invoke({"user_input": "i want to know about the appointment with the id 94511"})
+
+prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
+    ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info"),
+    ("user", "{user_input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad")
+])
+
+chain_agents_holder = prompt_agents_functions_holder | model_functions | OpenAIFunctionsAgentOutputParser()
+
+result1 = chain_agents_holder.invoke({
+    "user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511",
+    "agent_scratchpad": []
+})
+
+print(f"this is result1 tool: {result1.tool}")
+
+observation = get_appointment_function(result1.tool_input)
+
+print(observation)
+print(type(result1))
+
+format_to_openai_functions([(result1, observation)])
+
+result2 = chain_agents_holder.invoke({
+    "user_input": "",
+    "agent_scratchpad": format_to_openai_functions([(result1, observation)])
+})
+
+def run_agent(user_input):
+    intermediate_steps = []
+    while True:
+        result = chain_agents_holder.invoke({
+            "user_input": user_input,
+            "agent_scratchpad": format_to_openai_functions(intermediate_steps)
+        })
+        if isinstance(result, AgentFinish):
+            return result
+        tool = {
+            "get_appointment_function": get_appointment_function,
+            "get_appointment_info": get_appointment_info
+        }[result.tool]
+        observation = tool.run(result.tool_input)
+        intermediate_steps.append((result, observation))
+
+
+agent_chain_run = RunnablePassthrough.assign(
+    agent_scratchpad=lambda x: format_to_openai_functions(x["intermediate_steps"])
+) | chain_agents_holder
+
+
+def run_agent(user_input):
+    intermediate_steps = []
+    while True:
+        result = agent_chain_run.invoke({
+            "user_input": user_input,
+            "intermediate_steps": intermediate_steps
+        })
+        if isinstance(result, AgentFinish):
+            return result
+        tool = {
+            "get_appointment_function": get_appointment_function,
+            "get_appointment_info": get_appointment_info,
+        }[result.tool]
+        observation = tool.run(result.tool_input)
+        intermediate_steps.append((result, observation))
+
+
+
