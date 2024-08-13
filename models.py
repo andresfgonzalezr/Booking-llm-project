@@ -89,7 +89,7 @@ def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, 
     response_appointment = requests.get(url)
     print(response_appointment.json())
 
-    return "ok"
+    return response_appointment.json()
 
 
 format_tool_to_openai_function(get_appointment_function)
@@ -109,7 +109,7 @@ def get_appointment_info(id_appointment: str) -> str:
     api_key = os.getenv('API_KEY')
 
     booking_id = id_appointment
-    url = f'http://localhost:3002/v1/bookings/{booking_id}'
+    url = f'https://api.cal.com/v1/bookings/{booking_id}'
 
     response = requests.get(url, params={'apiKey': api_key})
 
@@ -148,14 +148,14 @@ prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="agent_scratchpad")
 ])
 
-chain_agents_holder = prompt_agents_functions_holder | model | OpenAIFunctionsAgentOutputParser()
+chain_agents_holder = prompt_agents_functions_holder | model_functions | OpenAIFunctionsAgentOutputParser()
 
 result1 = chain_agents_holder.invoke({
     "user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511",
     "agent_scratchpad": []
 })
 
-# print(f"this is result1 tool: {result1.tool}")
+print(f"this is result1 tool: {result1.tool}")
 
 observation = get_appointment_function(result1.tool_input)
 
@@ -165,7 +165,7 @@ print(type(result1))
 format_to_openai_functions([(result1, observation)])
 
 result2 = chain_agents_holder.invoke({
-    "input": "what is the weather is sf?",
+    "user_input": "",
     "agent_scratchpad": format_to_openai_functions([(result1, observation)])
 })
 
@@ -173,7 +173,7 @@ def run_agent(user_input):
     intermediate_steps = []
     while True:
         result = chain_agents_holder.invoke({
-            "input": user_input,
+            "user_input": user_input,
             "agent_scratchpad": format_to_openai_functions(intermediate_steps)
         })
         if isinstance(result, AgentFinish):
@@ -195,7 +195,7 @@ def run_agent(user_input):
     intermediate_steps = []
     while True:
         result = agent_chain_run.invoke({
-            "input": user_input,
+            "user_input": user_input,
             "intermediate_steps": intermediate_steps
         })
         if isinstance(result, AgentFinish):
@@ -206,3 +206,5 @@ def run_agent(user_input):
         }[result.tool]
         observation = tool.run(result.tool_input)
         intermediate_steps.append((result, observation))
+
+
