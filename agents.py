@@ -225,3 +225,48 @@ functions = [
     ]
 ]
 model = ChatOpenAI(temperature=0).bind(functions=functions)
+
+
+#### this is models.py
+
+
+prompt_agent_functions = ChatPromptTemplate.from_messages([
+    ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one"),
+    ("user", "{input}"),
+])
+chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser()
+
+result = chain_agents.invoke({"user_input": "hi"})
+
+
+def route(result):
+    if isinstance(result, AgentFinish):
+        return result.return_values['output']
+    else:
+        tools = {
+            "get_appointment_function": get_appointment_function,
+            "get_appointment_info": get_appointment_info,
+        }
+        return tools[result.tool].run(result.tool_input)
+
+
+chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser() | route
+
+
+
+def route(result):
+    if isinstance(result, AgentFinish):
+        return result.return_values['output']
+    else:
+        tools = {
+            "get_appointment_function": get_appointment_function,
+            "get_appointment_info": get_appointment_info,
+        }
+        return tools[result.tool].run(result.tool_input)
+
+
+chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser() | route
+
+# result_agents_chain_appointment = chain_agents.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
+
+# result_agents_chain_search = chain_agents.invoke({"user_input": "i want information about the appointment with the id 94511"})

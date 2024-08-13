@@ -13,20 +13,27 @@ from langchain_core.messages import AIMessage
 from langchain.tools.render import format_tool_to_openai_function
 from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
 from langchain.schema.agent import AgentFinish
+# from langchain.tools import tool
+from langchain.prompts import MessagesPlaceholder
+from langchain.agents.format_scratchpad import format_to_openai_functions
+from langchain.schema.runnable import RunnablePassthrough
 
+
+from dotenv import load_dotenv, find_dotenv
+_ = load_dotenv(find_dotenv())
+openai.api_key = os.environ['OPENAI_API_KEY']
 
 model = ChatOpenAI(temperature=0)
 
 
 class TaggingAppointment(BaseModel):
-    """tag the piece of text with particular info."""
+    # """tag the piece of text with particular info."""
     eventTypeId: int = Field(description="this is the event type")
     start: str = Field(description="the start time, this has to be in the format 'YYYY-MM-DDTHH:MM:00.000Z'")
     end: str = Field(description="the end time, has to be in the format 'YYYY-MM-DDTHH:MM:00.000Z', also has to be 30 minutes difference between the start and end dates.")
     name: str = Field(description="the name of the person that is making the appointment")
     email: str = Field(description="the email of the person that is making the appointment")
     time_zone: str = Field(description="the time zone of the person that is making the appointment e.g America/Bogota")
-    value: Optional[str] = Field(description="the way the appointment is going to be done e.g cal video, zoom, presentail")
 
 
 convert_pydantic_to_openai_function(TaggingAppointment)
@@ -55,25 +62,25 @@ arguments_data = data["function_call"]["arguments"]
 json_data = json.loads(arguments_data)
 
 
-@tool
-def get_appointment_function(appointment: TaggingAppointment) -> dict:
-    """tag the piece of text with particular info."""
-    eventTypeId: int = Field(description="this is the event type")
-    start: str = Field(description="the start time, this has to be in the format 'YYYY-MM-DDTHH:MM:00.000Z'")
-    end: str = Field(description="the end time, has to be in the format 'YYYY-MM-DDTHH:MM:00.000Z', also has to be 30 minutes difference between the start and end dates.")
-    name: str = Field(description="the name of the person that is making the appointment")
-    email: str = Field(description="the email of the person that is making the appointment")
-    time_zone: str = Field(description="the time zone of the person that is making the appointment e.g America/Bogota")
-    value: Optional[str] = Field(description="the way the appointment is going to be done e.g cal video, zoom, presentail")
+@tool(args_schema=TaggingAppointment)
+def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, email: str, time_zone: str) -> dict:
 
+    """tag the piece of text with particular info, and then make the appointment"""
 
+    params = {
+        "eventTypeId": eventTypeId,
+        "start": start,
+        "end": end,
+        "name": name,
+        "email": email,
+        "time_zone": time_zone
+    }
 
     cal_api_key = os.getenv('CAL_API_KEY')
 
     url = f"https://api.cal.com/v1/bookings?apiKey={cal_api_key}"
 
-
-    response_appointment = requests.post(url, json=appointment.dict)
+    response_appointment = requests.post(url, params=params)
 
     print("Ok", response_appointment.json())
     print(f"Error {response_appointment.status_code}: {response_appointment.text}")
@@ -82,30 +89,39 @@ def get_appointment_function(appointment: TaggingAppointment) -> dict:
     response_appointment = requests.get(url)
     print(response_appointment.json())
 
+    return "ok"
+
+
 format_tool_to_openai_function(get_appointment_function)
 
-print(get_appointment_function({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"}))
+# print(get_appointment_function({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"}))
 
 
 class TaggingAppointmentSearch(BaseModel):
-    """tag the piece of text with particular info."""
-    id: int = Field(description="this is the id")
+    # """tag the piece of text with particular info."""
+    id_appointment: int = Field(description="the id to search for appointment")
 
 
-@tool
-def get_appointment_info(user_input: str) -> dict:
-    """tag the piece of text with particular info."""
-    id: int = Field(description="this is the id")
+@tool(args_schema=TaggingAppointmentSearch)
+def get_appointment_info(id_appointment: str) -> str:
+    """tag the piece of text with particular info, and search for the appointment with the given id"""
 
     api_key = os.getenv('API_KEY')
 
-    booking_id = '949511'
+    booking_id = id_appointment
     url = f'http://localhost:3002/v1/bookings/{booking_id}'
 
     response = requests.get(url, params={'apiKey': api_key})
 
     print("Response:", response.json())
     print(f"Error {response.status_code}: {response.text}")
+
+    return "ok appointment"
+
+
+format_tool_to_openai_function(get_appointment_info)
+
+# print(f"this is ftof id_appointment {format_tool_to_openai_function({"id_appointment": "94511"})}")
 
 
 functions = [
@@ -116,25 +132,77 @@ functions = [
 model_functions = ChatOpenAI(temperature=0).bind(functions=functions)
 
 prompt_agent_functions = ChatPromptTemplate.from_messages([
-    ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one"),
-    ("user", "{input}"),
+    ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info"),
+    ("user", "{user_input}"),
 ])
+
 chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser()
 
-result = chain_agents.invoke({"user_input": "hi"})
+result = chain_agents.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
+
+# result = chain_agents.invoke({"user_input": "i want to know about the appointment with the id 94511"})
+
+prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
+    ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info"),
+    ("user", "{user_input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad")
+])
+
+chain_agents_holder = prompt_agents_functions_holder | model | OpenAIFunctionsAgentOutputParser()
+
+result1 = chain_agents_holder.invoke({
+    "user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511",
+    "agent_scratchpad": []
+})
+
+# print(f"this is result1 tool: {result1.tool}")
+
+observation = get_appointment_function(result1.tool_input)
+
+print(observation)
+print(type(result1))
+
+format_to_openai_functions([(result1, observation)])
+
+result2 = chain_agents_holder.invoke({
+    "input": "what is the weather is sf?",
+    "agent_scratchpad": format_to_openai_functions([(result1, observation)])
+})
+
+def run_agent(user_input):
+    intermediate_steps = []
+    while True:
+        result = chain_agents_holder.invoke({
+            "input": user_input,
+            "agent_scratchpad": format_to_openai_functions(intermediate_steps)
+        })
+        if isinstance(result, AgentFinish):
+            return result
+        tool = {
+            "get_appointment_function": get_appointment_function,
+            "get_appointment_info": get_appointment_info
+        }[result.tool]
+        observation = tool.run(result.tool_input)
+        intermediate_steps.append((result, observation))
 
 
-def route(result):
-    if isinstance(result, AgentFinish):
-        return result.return_values['output']
-    else:
-        tools = {
+agent_chain_run = RunnablePassthrough.assign(
+    agent_scratchpad=lambda x: format_to_openai_functions(x["intermediate_steps"])
+) | chain_agents_holder
+
+
+def run_agent(user_input):
+    intermediate_steps = []
+    while True:
+        result = agent_chain_run.invoke({
+            "input": user_input,
+            "intermediate_steps": intermediate_steps
+        })
+        if isinstance(result, AgentFinish):
+            return result
+        tool = {
             "get_appointment_function": get_appointment_function,
             "get_appointment_info": get_appointment_info,
-        }
-        return tools[result.tool].run(result.tool_input)
-
-
-chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser() | route
-
-
+        }[result.tool]
+        observation = tool.run(result.tool_input)
+        intermediate_steps.append((result, observation))
