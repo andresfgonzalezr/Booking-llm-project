@@ -27,6 +27,10 @@ openai.api_key = os.environ['OPENAI_API_KEY']
 model = ChatOpenAI(temperature=0)
 
 
+user_input = input("please introduce full name, email, the time you want to make the appointment and the time zone: ")
+
+input_dict = {"user_input": user_input}
+
 convert_pydantic_to_openai_function(TaggingAppointment)
 
 tagging_functions = [convert_pydantic_to_openai_function(TaggingAppointment)]
@@ -41,9 +45,18 @@ def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, 
         "eventTypeId": eventTypeId,
         "start": start,
         "end": end,
-        "name": name,
-        "email": email,
-        "time_zone": time_zone
+        "responses": {
+            "name": name,
+            "email": email,
+            "guests": [],
+            "location": {
+                "value": "Link",
+                "optionValue": ""
+            }
+        },
+        "metadata": {},
+        "timeZone": time_zone,
+        "language": "en",
     }
 
     cal_api_key = os.getenv('CAL_API_KEY')
@@ -59,12 +72,12 @@ def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, 
     response_appointment = requests.get(url)
     print(response_appointment.json())
 
-    return response_appointment.json()
+    return "ok"
 
 
 format_tool_to_openai_function(get_appointment_function)
 
-# print(get_appointment_function({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"}))
+# print(f"this is get_appointment_function with user_input {get_appointment_function({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 23 from 2024 at 13:00 AM and the event type is 949511"})}")
 
 
 @tool(args_schema=TaggingAppointmentSearch)
@@ -101,8 +114,7 @@ prompt_agent_functions = ChatPromptTemplate.from_messages([
 
 chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser()
 
-result = chain_agents.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
-
+result = chain_agents.invoke(input_dict)
 
 prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
     ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info"),
@@ -113,7 +125,7 @@ prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
 chain_agents_holder = prompt_agents_functions_holder | model_functions | OpenAIFunctionsAgentOutputParser()
 
 result1 = chain_agents_holder.invoke({
-    "user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511",
+    "user_input": user_input,
     "agent_scratchpad": []
 })
 
@@ -124,7 +136,7 @@ observation = get_appointment_function(result1.tool_input)
 format_to_openai_functions([(result1, observation)])
 
 result2 = chain_agents_holder.invoke({
-    "user_input": "",
+    "user_input": user_input,
     "agent_scratchpad": format_to_openai_functions([(result1, observation)])
 })
 
