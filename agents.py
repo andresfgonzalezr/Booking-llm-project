@@ -270,3 +270,8 @@ chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOu
 # result_agents_chain_appointment = chain_agents.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
 
 # result_agents_chain_search = chain_agents.invoke({"user_input": "i want information about the appointment with the id 94511"})
+
+class TaggingAppointmentSearch(BaseModel):
+    # """tag the piece of text with particular info."""
+    id_appointment: int = Field(description="the id to search for appointment")
+

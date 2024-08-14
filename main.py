@@ -31,27 +31,6 @@ convert_pydantic_to_openai_function(TaggingAppointment)
 
 tagging_functions = [convert_pydantic_to_openai_function(TaggingAppointment)]
 
-prompt_tagging_appointment = ChatPromptTemplate.from_messages([
-    ("system", "Think carefully, and then tag the text as instructed, if not explicitly provided do not guess, extract partial info"),
-    ("user", "{user_input}")
-])
-
-model_with_tagging_function = model.bind(
-    functions=tagging_functions,
-    function_call={"name": "TaggingAppointment"}
-)
-
-tagging_chain = prompt_tagging_appointment | model_with_tagging_function # | JsonOutputFunctionsParser()
-
-print(tagging_chain.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"}))
-
-json_message = tagging_chain.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
-
-data = json_message.additional_kwargs
-arguments_data = data["function_call"]["arguments"]
-
-json_data = json.loads(arguments_data)
-
 
 @tool(args_schema=TaggingAppointment)
 def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, email: str, time_zone: str) -> dict:
@@ -107,8 +86,6 @@ def get_appointment_info(id_appointment: str) -> str:
 
 format_tool_to_openai_function(get_appointment_info)
 
-# print(f"this is ftof id_appointment {format_tool_to_openai_function({"id_appointment": "94511"})}")
-
 
 functions = [
     format_tool_to_openai_function(f) for f in [
@@ -126,7 +103,6 @@ chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOu
 
 result = chain_agents.invoke({"user_input": "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 9 from 2024 at 13:00 AM and the event type is 949511"})
 
-# result = chain_agents.invoke({"user_input": "i want to know about the appointment with the id 94511"})
 
 prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
     ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info"),
@@ -141,12 +117,9 @@ result1 = chain_agents_holder.invoke({
     "agent_scratchpad": []
 })
 
-print(f"this is result1 tool: {result1.tool}")
 
 observation = get_appointment_function(result1.tool_input)
 
-print(observation)
-print(type(result1))
 
 format_to_openai_functions([(result1, observation)])
 
@@ -192,6 +165,4 @@ def run_agent(user_input):
         }[result.tool]
         observation = tool.run(result.tool_input)
         intermediate_steps.append((result, observation))
-
-
 
