@@ -1,19 +1,13 @@
 import os
 import openai
-import json
 from langchain.prompts import ChatPromptTemplate
-from langchain.schema.output_parser import StrOutputParser
 from langchain_openai import ChatOpenAI
-from typing import List, Optional
-from pydantic import BaseModel, Field
 from langchain.utils.openai_functions import convert_pydantic_to_openai_function
 from langchain.agents import tool
 import requests
-from langchain_core.messages import AIMessage
 from langchain.tools.render import format_tool_to_openai_function
 from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
 from langchain.schema.agent import AgentFinish
-# from langchain.tools import tool
 from langchain.prompts import MessagesPlaceholder
 from langchain.agents.format_scratchpad import format_to_openai_functions
 from langchain.schema.runnable import RunnablePassthrough
@@ -27,7 +21,7 @@ openai.api_key = os.environ['OPENAI_API_KEY']
 model = ChatOpenAI(temperature=0)
 
 
-user_input = input("please introduce full name, email, the time you want to make the appointment and the time zone: ")
+user_input = input("please introduce full name, email, the time you want to make the appointment: ")
 
 input_dict = {"user_input": user_input}
 
@@ -37,12 +31,12 @@ tagging_functions = [convert_pydantic_to_openai_function(TaggingAppointment)]
 
 
 @tool(args_schema=TaggingAppointment)
-def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, email: str, time_zone: str) -> dict:
+def get_appointment_function(start: str, end: str, name: str, email: str) -> dict:
 
     """tag the piece of text with particular info, and then make the appointment"""
 
     params = {
-        "eventTypeId": eventTypeId,
+        "eventTypeId": 949511,
         "start": start,
         "end": end,
         "responses": {
@@ -55,7 +49,7 @@ def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, 
             }
         },
         "metadata": {},
-        "timeZone": time_zone,
+        "timeZone": "America/Bogota",
         "language": "en",
     }
 
