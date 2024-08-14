@@ -63,7 +63,7 @@ def get_appointment_function(eventTypeId: int, start: str, end: str, name: str, 
 
     url = f"https://api.cal.com/v1/bookings?apiKey={cal_api_key}"
 
-    response_appointment = requests.post(url, params=params)
+    response_appointment = requests.post(url, json=params)
 
     print("Ok", response_appointment.json())
     print(f"Error {response_appointment.status_code}: {response_appointment.text}")
@@ -115,6 +115,7 @@ prompt_agent_functions = ChatPromptTemplate.from_messages([
 chain_agents = prompt_agent_functions | model_functions | OpenAIFunctionsAgentOutputParser()
 
 result = chain_agents.invoke(input_dict)
+print(result)
 
 prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
     ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info"),
