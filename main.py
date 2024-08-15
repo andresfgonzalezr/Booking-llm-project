@@ -2,7 +2,6 @@ import os
 import openai
 from langchain.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain.utils.openai_functions import convert_pydantic_to_openai_function
 from langchain.agents import tool
 import requests
 from langchain.tools.render import format_tool_to_openai_function
