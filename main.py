@@ -20,8 +20,6 @@ openai.api_key = os.environ['OPENAI_API_KEY']
 model = ChatOpenAI(temperature=0)
 
 
-user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 23 from 2024 at 13:00 AM and the event type is 949511"
-
 @tool(args_schema=TaggingAppointment)
 def get_appointment_function(start: str, end: str, name: str, email: str) -> dict:
 
@@ -118,7 +116,9 @@ def run_agent(user_input):
         observation = tool.run(result.tool_input)
         intermediate_steps.append((result, observation))
 
+
 if __name__ == '__main__':
+    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 23 from 2024 at 13:00 AM and the event type is 949511"
     agent_chain_run = model_function()
     run_agent(user_input)
 
