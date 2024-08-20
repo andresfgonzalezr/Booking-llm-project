@@ -1,3 +1,18 @@
+import openai
+import re
+import httpx
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+from langgraph.graph import StateGraph, END
+from typing import TypedDict, Annotated
+import operator
+from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, ToolMessage
+from langchain_openai import ChatOpenAI
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import os
 import openai
 from langchain.prompts import ChatPromptTemplate
@@ -12,10 +27,7 @@ from langchain.agents.format_scratchpad import format_to_openai_functions
 from langchain.schema.runnable import RunnablePassthrough
 from models import TaggingAppointment, TaggingAppointmentSearch
 
-
-from dotenv import load_dotenv, find_dotenv
-_ = load_dotenv(find_dotenv())
-openai.api_key = os.environ['OPENAI_API_KEY']
+_ = load_dotenv()
 
 model = ChatOpenAI(temperature=0)
 
@@ -76,6 +88,90 @@ def get_appointment_info(id_appointment: str) -> str:
     return "ok appointment"
 
 
+tool = [
+    format_tool_to_openai_function(f) for f in [
+        get_appointment_function, get_appointment_info
+    ]
+]
+
+for tool in tool:
+    print(f"this is tool {tool['name']}")
+
+memory = SqliteSaver.from_conn_string(":memory:")
+
+
+class AgentState(TypedDict):
+    messages: Annotated[list[AnyMessage], operator.add]
+
+
+class Agent:
+    def __init__(self, model, tools, checkpointer, system=""):
+        self.system = system
+        graph = StateGraph(AgentState)
+        graph.add_node("llm", self.call_openai)
+        graph.add_node("action", self.take_action)
+        graph.add_conditional_edges(
+            "llm",
+            self.exists_action,
+            {True: "action", False: END}
+        )
+        graph.add_edge("action", "llm")
+        graph.set_entry_point("llm")
+        self.graph = graph.compile(
+            checkpointer=MemorySaver(),
+            interrupt_before=["action"]
+        )
+        self.tools = {t['name']: t for t in tools}
+        self.model = model.bind_tools(tools)
+
+    def exists_action(self, state: AgentState):
+        result = state['messages'][-1]
+        return len(result.tool_calls) > 0
+
+    def call_openai(self, state: AgentState):
+        messages = state["messages"]
+        if self.system:
+            messages = [SystemMessage(content=self.system)] + messages
+        messages = self.model.invoke(messages)
+        return {"messages": [messages]}
+
+    def take_action(self, state: AgentState):
+        tool_calls = state['messages'][-1].tool_calls
+        results = []
+        for t in tool_calls:
+            print(f"Calling: {t}")
+            result = self.tools[t['name']].invoke(t['args'])
+            results.append(ToolMessage(tool_call_id=t['id'], name=t['name'], content=str(result)))
+        print("Back to the model!")
+        return {'messages': results}
+
+
+def active_agent(tool, memory, user_input):
+    prompt = """You are helpful assistant, that helps the user to make an appointment or ask about one \
+    tag the piece of text with particular info, the year of the request always is going to be 2024 \
+    and if not explicitly provided do not guess ask again . Extract partial info \
+    You are allowed to make multiple calls (either together or in sequence). \
+    Only look up information when you are sure of what you want. \
+    If you need to look up some information before asking a follow up question, you are allowed to do that! \
+    in order to have all the information you need to have the following information Name, Email, Start time \
+    if you are missing some of this information before you access to the tool ask for the missing info.\
+    in the response return me the complete information, confirming the information that would be use in the appointment.
+    """
+
+    abot = Agent(model, [tool], system=prompt, checkpointer=memory)
+
+    messages = [HumanMessage(content=user_input)]
+    thread = {"configurable": {"thread_id": "1"}}
+    for event in abot.graph.stream({"messages": messages}, thread):
+        for v in event.values():
+            print(v)
+            print(v["messages"][0].content)
+
+            final_message = v["messages"][0].content
+
+    return final_message
+
+
 def model_function():
     functions = [
         format_tool_to_openai_function(f) for f in [
@@ -99,11 +195,11 @@ def model_function():
     return agent_chain_run
 
 
-def run_agent(user_input):
+def run_agent(final_message):
     intermediate_steps = []
     while True:
         result = agent_chain_run.invoke({
-            "user_input": user_input,
+            "user_input": final_message,
             "intermediate_steps": intermediate_steps
         })
         if isinstance(result, AgentFinish):
@@ -119,6 +215,5 @@ def run_agent(user_input):
 if __name__ == '__main__':
     user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 23 from 2024 at 13:00 AM and the event type is 949511"
     agent_chain_run = model_function()
-    run_agent(user_input)
-
+    run_agent(active_agent(tool, memory, user_input))
 
