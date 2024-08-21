@@ -75,7 +75,7 @@ def get_appointment_function(start: str, end: str, name: str, email: str) -> dic
 def get_appointment_info(id_appointment: str) -> str:
     """tag the piece of text with particular info, and search for the appointment with the given id"""
 
-    api_key = os.getenv('API_KEY')
+    api_key = os.getenv('CAL_API_KEY')
 
     booking_id = id_appointment
     url = f'https://api.cal.com/v1/bookings/{booking_id}'
@@ -153,15 +153,15 @@ def active_agent(tool, memory, user_input):
     You are allowed to make multiple calls (either together or in sequence). \
     Only look up information when you are sure of what you want. \
     If you need to look up some information before asking a follow up question, you are allowed to do that! \
-    in order to have all the information you need to have the following information Name, Email, Start time \
+    in order to have all the information you need to have the following information Name, Email, Start time. \
     if you are missing some of this information before you access to the tool ask for the missing info.\
-    in the response return me the complete information, confirming the information that would be use in the appointment.
+    in the response return me the complete information (name, email, start time), confirming the information that would be use in the appointment.
     """
 
     abot = Agent(model, [tool], system=prompt, checkpointer=memory)
 
     messages = [HumanMessage(content=user_input)]
-    thread = {"configurable": {"thread_id": "1"}}
+    thread = {"configurable": {"thread_id": "2"}}
     for event in abot.graph.stream({"messages": messages}, thread):
         for v in event.values():
             print(v)
@@ -213,7 +213,7 @@ def run_agent(final_message):
 
 
 if __name__ == '__main__':
-    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 23 from 2024 at 13:00 AM and the event type is 949511"
+    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 28 from 2024 at 13:00 AM and the event type is 949511"
     agent_chain_run = model_function()
     run_agent(active_agent(tool, memory, user_input))
 
