@@ -213,7 +213,7 @@ def run_agent(final_message):
 
 
 if __name__ == '__main__':
-    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com, my timezone is America/Bogota and i want my appointment in august 28 from 2024 at 13:00 AM and the event type is 949511"
+    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com and i want my appointment in august 28 from 2024 at 13:00 AM and the event type is 949511"
     agent_chain_run = model_function()
     run_agent(active_agent(tool, memory, user_input))
 
