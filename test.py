@@ -1,20 +1,11 @@
-import openai
-import re
-import httpx
-import os
 from dotenv import load_dotenv
-from openai import OpenAI
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, Annotated
 import operator
 from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, ToolMessage
-from langchain_openai import ChatOpenAI
-from langchain_community.tools.tavily_search import TavilySearchResults
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import os
-import openai
 from langchain.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langchain.agents import tool
@@ -64,11 +55,19 @@ def get_appointment_function(start: str, end: str, name: str, email: str) -> dic
     print("Ok", response_appointment.json())
     print(f"Error {response_appointment.status_code}: {response_appointment.text}")
 
+    if response_appointment.status_code == 200:
+        print("Your appointment was successfully tagged")
+    else:
+        print("Your appointment was not successfully tagged")
+
+    error_number = response_appointment.status_code
+    print(error_number)
+
     url = f"https://api.cal.com/v1/event-types?apiKey={cal_api_key}"
     response_appointment = requests.get(url)
     print(response_appointment.json())
 
-    return "ok"
+    return error_number
 
 
 @tool(args_schema=TaggingAppointmentSearch)
@@ -213,7 +212,7 @@ def run_agent(final_message):
 
 
 if __name__ == '__main__':
-    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com and i want my appointment in august 28 from 2024 at 13:00 AM and the event type is 949511"
+    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com and i want my appointment in august 30 from 2024 at 11:00 AM and the event type is 949511"
     agent_chain_run = model_function()
     run_agent(active_agent(tool, memory, user_input))
 
