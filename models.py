@@ -14,3 +14,7 @@ class TaggingAppointmentSearch(BaseModel):
     id_appointment: int = Field(description="the id to search for appointment")
 
 
+class SearchAppointment(BaseModel):
+    day: str = Field(description="the day of the appointment")
+    month: str = Field(description="the month of the appointment")
+

@@ -70,6 +70,26 @@ def get_appointment_function(start: str, end: str, name: str, email: str) -> dic
     return error_number
 
 
+@tool()
+def search_appointment():
+    """when the user ask information for a day in order to schedule an appointment, the information of the start time is always in this format: YYYY-MM-DDTHH:MM:00.000Z, use this format and extract the day and month from the user input, the year is always 2024 and output the information from only that day"""
+
+    cal_api_key = os.getenv('CAL_API_KEY')
+
+    url = f"https://api.cal.com/v1/bookings?apiKey={cal_api_key}"
+
+    response = requests.get(url)
+    print(f"response booking {response.json()}")
+    print(f"response status code {response.status_code}")
+
+    data = response.json()
+
+    start_times = [booking['startTime'] for booking in data['bookings']]
+
+    print(start_times)
+
+    return "ok"
+
 @tool(args_schema=TaggingAppointmentSearch)
 def get_appointment_info(id_appointment: str) -> str:
     """tag the piece of text with particular info, and search for the appointment with the given id"""
@@ -89,7 +109,7 @@ def get_appointment_info(id_appointment: str) -> str:
 
 tool = [
     format_tool_to_openai_function(f) for f in [
-        get_appointment_function, get_appointment_info
+        get_appointment_function, get_appointment_info, search_appointment
     ]
 ]
 
@@ -174,13 +194,13 @@ def active_agent(tool, memory, user_input):
 def model_function():
     functions = [
         format_tool_to_openai_function(f) for f in [
-            get_appointment_function, get_appointment_info
+            get_appointment_function, get_appointment_info, search_appointment
         ]
     ]
     model_functions = ChatOpenAI(temperature=0).bind(functions=functions)
 
     prompt_agents_functions_holder = ChatPromptTemplate.from_messages([
-        ("system", "You are helpful assistant, that helps the user to make an appointment or ask about one, tag the piece of text with particular info, the year of the request always is going to be 2024, and if not explicitly provided do not guess. Extract partial info"),
+        ("system", "You are helpful assistant, that helps the user to make an appointment or ask about, tag the piece of text with particular info, the year of the request always is going to be 2024, and if not explicitly provided do not guess. Extract partial info."),
         ("user", "{user_input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad")
     ])
@@ -206,13 +226,17 @@ def run_agent(final_message):
         tool = {
             "get_appointment_function": get_appointment_function,
             "get_appointment_info": get_appointment_info,
+            "search_appointment": search_appointment
         }[result.tool]
         observation = tool.run(result.tool_input)
         intermediate_steps.append((result, observation))
 
 
 if __name__ == '__main__':
-    user_input = "i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com and i want my appointment in august 30 from 2024 at 11:00 AM and the event type is 949511"
+    user_input = "i want to make an appointment what time do you have, can you give options"
     agent_chain_run = model_function()
     run_agent(active_agent(tool, memory, user_input))
+    # search_appointment()
 
+
+# e.g i want to make an appointment my name is Andres Gonzalez, my email is leoracer@gmail.com and i want my appointment in august 30 from 2024 at 11:00 AM and the event type is 949511
