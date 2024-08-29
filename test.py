@@ -233,7 +233,7 @@ def run_agent(final_message):
 
 
 if __name__ == '__main__':
-    user_input = "i want to make an appointment what time do you have, can you give options"
+    user_input = "i want to make an appointment what time do you have"
     agent_chain_run = model_function()
     run_agent(active_agent(tool, memory, user_input))
     # search_appointment()
